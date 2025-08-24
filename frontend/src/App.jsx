@@ -341,13 +341,50 @@ function App() {
                 </div>
               ) : results.success ? (
                 <div className="space-y-6">
-                  {/* Query Results Section */}
+                  {/* Person Identification Section */}
+                  {results.person_identified && results.person_data && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold text-green-800 mb-2 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Person Identified ✅
+                      </h3>
+                      <div className="grid grid-cols-1 gap-2 text-sm">
+                        <div><strong>Name:</strong> {results.person_data.name}</div>
+                        <div><strong>Roll Number:</strong> {results.person_data.roll_number || 'Not available'}</div>
+                        <div><strong>Branch:</strong> {results.person_data.branch || 'Not available'}</div>
+                        <div><strong>Email:</strong> {results.person_data.email || 'Not available'}</div>
+                      </div>
+                      {results.notification_sent && (
+                        <div className="mt-2 text-green-700 text-sm font-medium">
+                          📩 Notification sent to person
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!results.person_identified && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold text-yellow-800 mb-2 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        Person Not Found in Database
+                      </h3>
+                      <p className="text-yellow-700 text-sm">
+                        The scanned person is not registered in our database. Please contact administration to register this person.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Extracted Data Section */}
                   <div>
                     <h3 className="text-lg font-semibold text-gray-700 mb-3 flex items-center">
                       <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
-                      Structured Information
+                      Extracted Information
                     </h3>
                     <div className="space-y-3">
                       {Object.entries(results.data).map(([key, value]) => (
