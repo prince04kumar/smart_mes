@@ -38,67 +38,42 @@ def analyze_id_card():
         print(f"Image size: {len(image_bytes)} bytes")
         
         print("Sending to AWS Textract...")
-        # Analyze document with AWS Textract
+        # Analyze document with AWS Textract - same as textract2.py
         response = textract.analyze_document(
             Document={"Bytes": image_bytes},
-            FeatureTypes=["QUERIES", "FORMS", "TABLES"],
+            FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
-                    {"Text": "What is the name?", "Alias": "StudentName"},
-                    {"Text": "What is the student name?", "Alias": "StudentName2"},
-                    {"Text": "What is the roll number?", "Alias": "RollNumber"},
-                    {"Text": "What is the enrollment number?", "Alias": "EnrollmentNumber"},
-                    {"Text": "What is the department?", "Alias": "Branch"},
-                    {"Text": "What is the branch?", "Alias": "Branch2"},
-                    {"Text": "What is the contact number?", "Alias": "ContactNumber"},
-                    {"Text": "What is the phone number?", "Alias": "Phone"},
-                    {"Text": "What is the date of birth?", "Alias": "DateOfBirth"},
-                    {"Text": "What is the blood group?", "Alias": "BloodGroup"},
+                    {"Text": "What is the student's name on the ID card?", "Alias": "StudentName"},
+                    # {"Text": "What is the roll number?", "Alias": "RollNumber"},
+                    # {"Text": "What is the branch?", "Alias": "Branch"},
                 ]
             }
-        )
+        )   
 
         print("AWS Textract response received")
-        print(f"Total blocks found: {len(response.get('Blocks', []))}")
         
-        # Debug: Print all blocks to understand what Textract found
-        print("=== All Textract Blocks ===")
-        for i, block in enumerate(response.get("Blocks", [])):
-            if block["BlockType"] in ["QUERY", "QUERY_RESULT"]:
-                print(f"Block {i}: {block['BlockType']} - {block.get('Text', 'No text')} - Query: {block.get('Query', {})}")
-
-        # Extract results
+        # Print results exactly like textract2.py
+        print("----- Scan Result -----")
         results = {}
-        all_text = []
-        
-        # First, let's see all the text Textract found
-        for block in response["Blocks"]:
-            if block["BlockType"] == "LINE":
-                all_text.append(block.get("Text", ""))
-        
-        print("=== All Text Found by Textract ===")
-        for i, text in enumerate(all_text):
-            print(f"Line {i}: {text}")
-        print("================================")
-        
-        # Now extract query results
         for block in response["Blocks"]:
             if block["BlockType"] == "QUERY_RESULT":
                 query_info = block.get("Query", {})
                 alias = query_info.get("Alias", "Unknown")
-                text = block.get("Text", "Not found")
-                confidence = block.get("Confidence", 0)
+                text = block.get("Text", "")
+                print(f"{alias}: {text}")
+                
+                # Also prepare for JSON response
                 results[alias] = {
                     "value": text,
-                    "confidence": round(confidence, 2)
+                    "confidence": round(block.get("Confidence", 0), 2)
                 }
+        print("-----------------------")
 
         print("Upload Results:", results)
         return jsonify({
             "success": True,
             "data": results,
-            "all_text": all_text,
-            "total_lines": len(all_text),
             "message": "ID card analyzed successfully"
         })
 
@@ -127,59 +102,42 @@ def analyze_webcam():
         print(f"Decoded image size: {len(image_bytes)} bytes")
         
         print("Sending to AWS Textract...")
-        # Analyze document with AWS Textract
+        # Analyze document with AWS Textract - same as textract2.py
         response = textract.analyze_document(
             Document={"Bytes": image_bytes},
-            FeatureTypes=["QUERIES", "FORMS", "TABLES"],
+            FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
-                    {"Text": "What is the name?", "Alias": "StudentName"},
-                    {"Text": "What is the student name?", "Alias": "StudentName2"},
+                    {"Text": "What is the student's name on the ID card?", "Alias": "StudentName"},
                     {"Text": "What is the roll number?", "Alias": "RollNumber"},
-                    {"Text": "What is the enrollment number?", "Alias": "EnrollmentNumber"},
-                    {"Text": "What is the department?", "Alias": "Branch"},
-                    {"Text": "What is the branch?", "Alias": "Branch2"},
-                    {"Text": "What is the contact number?", "Alias": "ContactNumber"},
-                    {"Text": "What is the phone number?", "Alias": "Phone"},
-                    {"Text": "What is the date of birth?", "Alias": "DateOfBirth"},
-                    {"Text": "What is the blood group?", "Alias": "BloodGroup"},
+                    {"Text": "What is the branch?", "Alias": "Branch"},
                 ]
             }
         )
 
         print("AWS Textract response received")
         
-        # Extract results
+        # Print results exactly like textract2.py
+        print("----- Scan Result -----")
         results = {}
-        all_text = []
-        
-        # First, let's see all the text Textract found
-        for block in response["Blocks"]:
-            if block["BlockType"] == "LINE":
-                all_text.append(block.get("Text", ""))
-        
-        print("=== All Text Found by Textract (Webcam) ===")
-        for i, text in enumerate(all_text):
-            print(f"Line {i}: {text}")
-        print("==========================================")
-        
-        # Now extract query results
         for block in response["Blocks"]:
             if block["BlockType"] == "QUERY_RESULT":
                 query_info = block.get("Query", {})
                 alias = query_info.get("Alias", "Unknown")
-                text = block.get("Text", "Not found")
-                confidence = block.get("Confidence", 0)
+                text = block.get("Text", "")
+                print(f"{alias}: {text}")
+                
+                # Also prepare for JSON response
                 results[alias] = {
                     "value": text,
-                    "confidence": round(confidence, 2)
+                    "confidence": round(block.get("Confidence", 0), 2)
                 }
+        print("-----------------------")
+        
         print("Webcam Results:", results)
         return jsonify({
             "success": True,
             "data": results,
-            "all_text": all_text,
-            "total_lines": len(all_text),
             "message": "Webcam image analyzed successfully"
         })
 
