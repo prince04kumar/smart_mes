@@ -30,7 +30,7 @@ def health_check():
 
 @app.route('/analyze-id', methods=['POST'])
 def analyze_id_card():
-    print("=== Analyze ID Card Request Received ===")
+    print("=== Analyze Doc Request Received ===")
     try:
         # Get the uploaded file
         if 'image' not in request.files:
@@ -58,7 +58,7 @@ def analyze_id_card():
             FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
-                    {"Text": "What is the student's name on the ID card?", "Alias": "StudentName"},
+                    {"Text": "What is the student's name on the Doc?", "Alias": "StudentName"},
                     # {"Text": "What is the roll number?", "Alias": "RollNumber"},
                     # {"Text": "What is the branch?", "Alias": "Branch"},
                 ]
@@ -131,21 +131,20 @@ def analyze_id_card():
                 "file_name": file.filename
             }
             db_manager.add_scan_history(person_data['_id'], scan_data)
-            # Send notification - use email if configured, fallback to console
+            
+            # Check if email is configured
             smtp_enabled = all([
                 os.getenv('SMTP_ENABLED', 'false').lower() == 'true',
                 os.getenv('SMTP_HOST'),
                 os.getenv('SMTP_EMAIL'),
                 os.getenv('SMTP_PASSWORD')
             ])
-            # Retrieve image from Redis for attachment
-            attachment_bytes = cache_service.get_document(cache_key)
+            
+            # Only send console notification for now - email will be sent via separate endpoint
             notification_sent = message_service.send_identification_message(
                 person_data,
                 results,
-                method="email" if smtp_enabled else "console",
-                attachment_bytes=attachment_bytes,
-                attachment_filename=file.filename
+                method="console"
             )
         else:
             print(f"❓ PERSON NOT FOUND in database. Tried names: {possible_names}")
@@ -158,17 +157,20 @@ def analyze_id_card():
                 "name": person_data.get('name') if person_data else None,
                 "email": person_data.get('email') if person_data else None,
                 "roll_number": person_data.get('roll_number') if person_data else None,
-                "branch": person_data.get('branch') if person_data else None
+                "branch": person_data.get('branch') if person_data else None,
+                "person_id": str(person_data.get('_id')) if person_data else None
             } if person_data else None,
             "notification_sent": notification_sent,
-            "message": "ID card analyzed successfully"
+            "message": "Doc analyzed successfully",
+            "cache_key": cache_key if person_identified else None,
+            "smtp_enabled": smtp_enabled
         })
     except Exception as e:
         print(f"Error in analyze_id_card: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
-            "message": "Error analyzing ID card"
+            "message": "Error analyzing Doc"
         }), 500
 
     except Exception as e:
@@ -176,7 +178,7 @@ def analyze_id_card():
         return jsonify({
             "success": False,
             "error": str(e),
-            "message": "Error analyzing ID card"
+            "message": "Error analyzing Doc"
         }), 500
 
 @app.route('/analyze-webcam', methods=['POST'])
@@ -210,7 +212,7 @@ def analyze_webcam():
                 FeatureTypes=["QUERIES"],
                 QueriesConfig={
                     "Queries": [
-                        {"Text": "What is the student's name on the ID card?", "Alias": "StudentName"},
+                        {"Text": "What is the student's name on the Doc?", "Alias": "StudentName"},
                         {"Text": "What is the roll number?", "Alias": "RollNumber"},
                         {"Text": "What is the branch?", "Alias": "Branch"},
                     ]
@@ -282,21 +284,20 @@ def analyze_webcam():
                     "extracted_data": results
                 }
                 db_manager.add_scan_history(person_data['_id'], scan_data)
-                # Send notification - use email if configured, fallback to console
+                
+                # Check if email is configured
                 smtp_enabled = all([
                     os.getenv('SMTP_ENABLED', 'false').lower() == 'true',
                     os.getenv('SMTP_HOST'),
                     os.getenv('SMTP_EMAIL'),
                     os.getenv('SMTP_PASSWORD')
                 ])
-                # Retrieve image from Redis for attachment
-                attachment_bytes = cache_service.get_document(cache_key)
+                
+                # Only send console notification for now - email will be sent via separate endpoint
                 notification_sent = message_service.send_identification_message(
                     person_data,
                     results,
-                    method="email" if smtp_enabled else "console",
-                    attachment_bytes=attachment_bytes,
-                    attachment_filename=f"webcam_scan_{int(time.time())}.jpg"
+                    method="console"
                 )
             else:
                 print(f"❓ PERSON NOT FOUND in database. Tried names: {possible_names}")
@@ -309,10 +310,13 @@ def analyze_webcam():
                     "name": person_data.get('name') if person_data else None,
                     "email": person_data.get('email') if person_data else None,
                     "roll_number": person_data.get('roll_number') if person_data else None,
-                    "branch": person_data.get('branch') if person_data else None
+                    "branch": person_data.get('branch') if person_data else None,
+                    "person_id": str(person_data.get('_id')) if person_data else None
                 } if person_data else None,
                 "notification_sent": notification_sent,
-                "message": "Webcam image analyzed successfully"
+                "message": "Webcam image analyzed successfully",
+                "cache_key": cache_key if person_identified else None,
+                "smtp_enabled": smtp_enabled
             })
         except Exception as e:
             print(f"Error in analyze_webcam: {str(e)}")
@@ -414,6 +418,72 @@ def setup_sample_data():
             "message": "Error setting up sample data"
         }), 500
 
+@app.route('/send-notification-email', methods=['POST'])
+def send_notification_email():
+    """Send email notification to identified person with scanned document"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+            
+        person_id = data.get('person_id')
+        cache_key = data.get('cache_key')
+        scan_results = data.get('scan_results', {})
+        
+        if not person_id or not cache_key:
+            return jsonify({"error": "Missing person_id or cache_key"}), 400
+        
+        # Get person data from database
+        from bson import ObjectId
+        person_data = db_manager.collection.find_one({"_id": ObjectId(person_id)})
+        
+        if not person_data:
+            return jsonify({"error": "Person not found in database"}), 404
+            
+        if not person_data.get('email'):
+            return jsonify({"error": f"No email address found for {person_data.get('name', 'Unknown')}"}), 400
+        
+        # Retrieve scanned document from Redis cache
+        from cache_service import cache_service
+        attachment_bytes = cache_service.get_document(cache_key)
+        
+        if not attachment_bytes:
+            return jsonify({"error": "Scanned document not found in cache"}), 404
+        
+        # Determine filename based on cache key
+        if 'webcam' in cache_key:
+            filename = f"webcam_scan_{person_data.get('name', 'unknown').replace(' ', '_')}.jpg"
+        else:
+            filename = cache_key.split(':')[-1] if ':' in cache_key else "scanned_document.jpg"
+        
+        # Send email with attachment
+        success = message_service.send_identification_message(
+            person_data,
+            scan_results,
+            method="email",
+            attachment_bytes=attachment_bytes,
+            attachment_filename=filename
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Email sent successfully to {person_data['name']} ({person_data['email']})"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Failed to send email"
+            }), 500
+            
+    except Exception as e:
+        print(f"Error sending notification email: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Error sending notification email"
+        }), 500
+
 @app.route('/test-email', methods=['POST'])
 def test_email():
     """Test email configuration"""
@@ -451,6 +521,70 @@ def get_email_status():
             "success": False,
             "error": str(e),
             "message": "Error retrieving email status"
+        }), 500
+
+@app.route('/persons', methods=['GET'])
+def get_persons():
+    """Get all persons from database"""
+    try:
+        persons = db_manager.get_all_persons()
+        
+        # Convert ObjectId to string for JSON serialization
+        for person in persons:
+            person['_id'] = str(person['_id'])
+        
+        return jsonify({
+            "success": True,
+            "persons": persons,
+            "count": len(persons)
+        })
+    except Exception as e:
+        print(f"Error getting persons: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Error retrieving persons"
+        }), 500
+
+@app.route('/create-person', methods=['POST'])
+def create_person_endpoint():
+    """Create a new person in the database"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        # Validate required fields
+        if not data.get('name', '').strip():
+            return jsonify({"error": "Name is required"}), 400
+        
+        # Create person
+        person_id = db_manager.create_person(
+            name=data.get('name', '').strip(),
+            roll_number=data.get('roll_number', '').strip() or None,
+            branch=data.get('branch', '').strip() or None,
+            email=data.get('email', '').strip() or None,
+            phone=data.get('phone', '').strip() or None
+        )
+        
+        if person_id:
+            return jsonify({
+                "success": True,
+                "message": f"Person '{data['name']}' created successfully",
+                "person_id": str(person_id)
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Failed to create person"
+            }), 500
+            
+    except Exception as e:
+        print(f"Error creating person: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Error creating person"
         }), 500
 
 if __name__ == '__main__':

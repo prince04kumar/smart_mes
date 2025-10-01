@@ -27,7 +27,7 @@ while True:
             FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
-                    {"Text": "What is the student's name on the ID card?", "Alias": "StudentName"},
+                    {"Text": "What is the student's name on the Doc?", "Alias": "StudentName"},
                     {"Text": "What is the roll number?", "Alias": "RollNumber"},
                     {"Text": "What is the branch?", "Alias": "Branch"},
                 ]

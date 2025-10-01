@@ -16,7 +16,7 @@ class MessageService:
         self.smtp_username = os.getenv('SMTP_USERNAME', '')
         self.smtp_password = os.getenv('SMTP_PASSWORD', '')
         self.from_email = os.getenv('FROM_EMAIL', self.smtp_username)
-        self.from_name = os.getenv('FROM_NAME', 'ID Card Scanning System')
+        self.from_name = os.getenv('FROM_NAME', 'Doc Scanning System')
     
     def send_identification_message(self, person_data, scan_data, method="console", attachment_bytes=None, attachment_filename=None):
         """Send identification message to person"""
@@ -25,7 +25,7 @@ class MessageService:
         message_content = self._prepare_message_content(person_data, scan_data)
         
         if method == "email" and self.email_enabled and person_data.get('email'):
-            return self._send_email(person_data['email'], "ID Card Scan Notification", message_content, attachment_bytes, attachment_filename)
+            return self._send_email(person_data['email'], "Doc Scan Notification", message_content, attachment_bytes, attachment_filename)
         elif method == "sms" and self.sms_enabled and person_data.get('phone'):
             return self._send_sms(person_data['phone'], message_content)
         else:
@@ -37,11 +37,11 @@ class MessageService:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         message = f"""
-🎯 ID Card Scan Alert!
+🎯 Doc Scan Alert!
 
 Hello {person_data.get('name', 'Unknown')}!
 
-Your ID card was just scanned at {timestamp}.
+Your Doc was just scanned at {timestamp}.
 
 📋 Detected Information:
 • Name: {scan_data.get('StudentName', {}).get('value', 'Not detected')}
@@ -56,7 +56,7 @@ Your ID card was just scanned at {timestamp}.
 If this wasn't you, please contact security immediately.
 
 --
-ID Card Scanning System
+Doc Scanning System
         """.strip()
         
         return message
@@ -142,13 +142,13 @@ ID Card Scanning System
         <body>
             <div class="container">
                 <div class="header">
-                    <h2>🎯 ID Card Scan Alert!</h2>
+                    <h2>🎯 Doc Scan Alert!</h2>
                 </div>
                 <div class="content">
                     <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">{html_content}</pre>
                 </div>
                 <div class="footer">
-                    <p>This is an automated message from the ID Card Scanning System</p>
+                    <p>This is an automated message from the Doc Scanning System</p>
                 </div>
             </div>
         </body>
@@ -187,11 +187,11 @@ ID Card Scanning System
                 print("❌ No test email provided")
                 return False
                 
-            test_subject = "ID Card System - Email Test"
+            test_subject = "Doc System - Email Test"
             test_message = f"""
 🧪 Email Configuration Test
 
-This is a test email from the ID Card Scanning System.
+This is a test email from the Doc Scanning System.
 
 Configuration:
 • SMTP Server: {self.smtp_server}
@@ -202,7 +202,7 @@ Configuration:
 If you received this email, your SMTP configuration is working correctly!
 
 --
-ID Card Scanning System
+Doc Scanning System
             """.strip()
             
             return self._send_email(test_email, test_subject, test_message)

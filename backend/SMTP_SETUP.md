@@ -19,7 +19,7 @@
    SMTP_USERNAME=your-email@gmail.com
    SMTP_PASSWORD=your-16-character-app-password
    FROM_EMAIL=your-email@gmail.com
-   FROM_NAME=ID Card Scanning System
+   FROM_NAME=Doc Scanning System
    ```
 
 ### 2. Outlook/Hotmail Setup
@@ -32,7 +32,7 @@
    SMTP_USERNAME=your-email@outlook.com
    SMTP_PASSWORD=your-password
    FROM_EMAIL=your-email@outlook.com
-   FROM_NAME=ID Card Scanning System
+   FROM_NAME=Doc Scanning System
    ```
 
 ### 3. Yahoo Mail Setup
@@ -45,7 +45,7 @@
    SMTP_USERNAME=your-email@yahoo.com
    SMTP_PASSWORD=your-password
    FROM_EMAIL=your-email@yahoo.com
-   FROM_NAME=ID Card Scanning System
+   FROM_NAME=Doc Scanning System
    ```
 
 ### 4. Testing Your Configuration
