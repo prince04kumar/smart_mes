@@ -187,147 +187,139 @@ def analyze_webcam():
     try:
         # Get base64 image from request
         data = request.get_json()
-        try:
-            # Get base64 image from request
-            data = request.get_json()
-            if 'image' not in data:
-                print("Error: No image data in request")
-                return jsonify({"error": "No image data provided"}), 400
+        if 'image' not in data:
+            print("Error: No image data in request")
+            return jsonify({"error": "No image data provided"}), 400
 
-            print("Processing webcam image...")
-            # Decode base64 image
-            image_data = data['image'].split(',')[1]  # Remove data:image/jpeg;base64, prefix
-            image_bytes = base64.b64decode(image_data)
-            print(f"Decoded image size: {len(image_bytes)} bytes")
+        print("Processing webcam image...")
+        # Decode base64 image
+        image_data = data['image'].split(',')[1]  # Remove data:image/jpeg;base64, prefix
+        image_bytes = base64.b64decode(image_data)
+        print(f"Decoded image size: {len(image_bytes)} bytes")
 
-            # Store webcam image in Redis cache
-            from cache_service import cache_service
-            cache_key = f"scan:webcam:{int(time.time())}.jpg"
-            cache_service.set_document(cache_key, image_bytes)
+        # Store webcam image in Redis cache
+        from cache_service import cache_service
+        cache_key = f"scan:webcam:{int(time.time())}.jpg"
+        cache_service.set_document(cache_key, image_bytes)
 
-            print("Sending to AWS Textract...")
-            # Analyze document with AWS Textract - same as textract2.py
-            response = textract.analyze_document(
-                Document={"Bytes": image_bytes},
-                FeatureTypes=["QUERIES"],
-                QueriesConfig={
-                    "Queries": [
-                        {"Text": "What is the student's name on the Doc?", "Alias": "StudentName"},
-                        {"Text": "What is the roll number?", "Alias": "RollNumber"},
-                        {"Text": "What is the branch?", "Alias": "Branch"},
-                    ]
+        print("Sending to AWS Textract...")
+        # Analyze document with AWS Textract - same as textract2.py
+        response = textract.analyze_document(
+            Document={"Bytes": image_bytes},
+            FeatureTypes=["QUERIES"],
+            QueriesConfig={
+                "Queries": [
+                    {"Text": "What is the student's name on the Doc?", "Alias": "StudentName"},
+                    {"Text": "What is the roll number?", "Alias": "RollNumber"},
+                    {"Text": "What is the branch?", "Alias": "Branch"},
+                ]
+            }
+        )
+
+        print("AWS Textract response received")
+
+        # Print results exactly like textract2.py
+        print("----- Scan Result -----")
+        results = {}
+        for block in response["Blocks"]:
+            if block["BlockType"] == "QUERY_RESULT":
+                query_info = block.get("Query", {})
+                alias = query_info.get("Alias", "Unknown")
+                text = block.get("Text", "")
+                print(f"{alias}: {text}")
+                # Also prepare for JSON response
+                results[alias] = {
+                    "value": text,
+                    "confidence": round(block.get("Confidence", 0), 2)
                 }
-            )
+        print("-----------------------")
 
-            print("AWS Textract response received")
+        print("Webcam Results:", results)
 
-            # Print results exactly like textract2.py
-            print("----- Scan Result -----")
-            results = {}
-            for block in response["Blocks"]:
-                if block["BlockType"] == "QUERY_RESULT":
-                    query_info = block.get("Query", {})
-                    alias = query_info.get("Alias", "Unknown")
-                    text = block.get("Text", "")
-                    print(f"{alias}: {text}")
-                    # Also prepare for JSON response
-                    results[alias] = {
-                        "value": text,
-                        "confidence": round(block.get("Confidence", 0), 2)
-                    }
-            print("-----------------------")
+        # 🔍 IMPROVED PERSON IDENTIFICATION AND NOTIFICATION
+        person_identified = False
+        person_data = None
+        notification_sent = False
 
-            print("Webcam Results:", results)
+        # Extract all possible names from results (including Unknown alias)
+        possible_names = []
 
-            # 🔍 IMPROVED PERSON IDENTIFICATION AND NOTIFICATION
-            person_identified = False
-            person_data = None
-            notification_sent = False
+        # Check StudentName alias
+        student_name = results.get('StudentName', {}).get('value', '').strip()
+        if student_name and student_name.lower() not in ['not found', '', 'none']:
+            possible_names.append(student_name)
 
-            # Extract all possible names from results (including Unknown alias)
-            possible_names = []
+        # Check Unknown alias (sometimes Textract puts names here)
+        unknown_value = results.get('Unknown', {}).get('value', '').strip()
+        if unknown_value and unknown_value.lower() not in ['not found', '', 'none']:
+            possible_names.append(unknown_value)
 
-            # Check StudentName alias
-            student_name = results.get('StudentName', {}).get('value', '').strip()
-            if student_name and student_name.lower() not in ['not found', '', 'none']:
-                possible_names.append(student_name)
+        # Try to find person by any possible name
+        print(f"🔍 Trying to identify person from possible names: {possible_names}")
+        for name in possible_names:
+            person_data = db_manager.find_person_by_name(name)
+            if person_data:
+                person_identified = True
+                print(f"🎯 Successfully identified by name: '{name}' -> {person_data['name']}")
+                break
 
-            # Check Unknown alias (sometimes Textract puts names here)
-            unknown_value = results.get('Unknown', {}).get('value', '').strip()
-            if unknown_value and unknown_value.lower() not in ['not found', '', 'none']:
-                possible_names.append(unknown_value)
-
-            # Try to find person by any possible name
-            print(f"🔍 Trying to identify person from possible names: {possible_names}")
-            for name in possible_names:
-                person_data = db_manager.find_person_by_name(name)
+        # If not found by name, try by roll number
+        if not person_identified:
+            roll_number = results.get('RollNumber', {}).get('value', '').strip()
+            if roll_number and roll_number.lower() not in ['not found', '', 'none']:
+                person_data = db_manager.find_person_by_roll_number(roll_number)
                 if person_data:
                     person_identified = True
-                    print(f"🎯 Successfully identified by name: '{name}' -> {person_data['name']}")
-                    break
+                    print(f"🎯 Successfully identified by roll number: {roll_number}")
 
-            # If not found by name, try by roll number
-            if not person_identified:
-                roll_number = results.get('RollNumber', {}).get('value', '').strip()
-                if roll_number and roll_number.lower() not in ['not found', '', 'none']:
-                    person_data = db_manager.find_person_by_roll_number(roll_number)
-                    if person_data:
-                        person_identified = True
-                        print(f"🎯 Successfully identified by roll number: {roll_number}")
+        # Check if email is configured
+        smtp_enabled = all([
+            os.getenv('SMTP_ENABLED', 'false').lower() == 'true',
+            os.getenv('SMTP_HOST'),
+            os.getenv('SMTP_EMAIL'),
+            os.getenv('SMTP_PASSWORD')
+        ])
 
-            # Send notification if person is identified
-            if person_identified and person_data:
-                print(f"🎯 FINAL PERSON IDENTIFIED: {person_data['name']}" )
-                # Add scan history
-                scan_data = {
-                    "source": "webcam",
-                    "extracted_data": results
-                }
-                db_manager.add_scan_history(person_data['_id'], scan_data)
-                
-                # Check if email is configured
-                smtp_enabled = all([
-                    os.getenv('SMTP_ENABLED', 'false').lower() == 'true',
-                    os.getenv('SMTP_HOST'),
-                    os.getenv('SMTP_EMAIL'),
-                    os.getenv('SMTP_PASSWORD')
-                ])
-                
-                # Only send console notification for now - email will be sent via separate endpoint
-                notification_sent = message_service.send_identification_message(
-                    person_data,
-                    results,
-                    method="console"
-                )
-            else:
-                print(f"❓ PERSON NOT FOUND in database. Tried names: {possible_names}")
+        # Send notification if person is identified
+        if person_identified and person_data:
+            print(f"🎯 FINAL PERSON IDENTIFIED: {person_data['name']}" )
+            # Add scan history
+            scan_data = {
+                "source": "webcam",
+                "extracted_data": results
+            }
+            db_manager.add_scan_history(person_data['_id'], scan_data)
+            
+            # Only send console notification for now - email will be sent via separate endpoint
+            notification_sent = message_service.send_identification_message(
+                person_data,
+                results,
+                method="console"
+            )
+        else:
+            print(f"❓ PERSON NOT FOUND in database. Tried names: {possible_names}")
 
-            return jsonify({
-                "success": True,
-                "data": results,
-                "person_identified": person_identified,
-                "person_data": {
-                    "name": person_data.get('name') if person_data else None,
-                    "email": person_data.get('email') if person_data else None,
-                    "roll_number": person_data.get('roll_number') if person_data else None,
-                    "branch": person_data.get('branch') if person_data else None,
-                    "person_id": str(person_data.get('_id')) if person_data else None
-                } if person_data else None,
-                "notification_sent": notification_sent,
-                "message": "Webcam image analyzed successfully",
-                "cache_key": cache_key if person_identified else None,
-                "smtp_enabled": smtp_enabled
-            })
-        except Exception as e:
-            print(f"Error in analyze_webcam: {str(e)}")
-            return jsonify({
-                "success": False,
-                "error": str(e),
-                "message": "Error analyzing webcam image"
-            }), 500
+        return jsonify({
+            "success": True,
+            "data": results,
+            "person_identified": person_identified,
+            "person_data": {
+                "name": person_data.get('name') if person_data else None,
+                "email": person_data.get('email') if person_data else None,
+                "roll_number": person_data.get('roll_number') if person_data else None,
+                "branch": person_data.get('branch') if person_data else None,
+                "person_id": str(person_data.get('_id')) if person_data else None
+            } if person_data else None,
+            "notification_sent": notification_sent,
+            "message": "Webcam image analyzed successfully",
+            "cache_key": cache_key if person_identified else None,
+            "smtp_enabled": smtp_enabled
+        })
 
     except Exception as e:
         print(f"Error in analyze_webcam: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
             "error": str(e),

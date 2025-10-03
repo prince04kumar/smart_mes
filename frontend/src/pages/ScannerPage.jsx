@@ -128,33 +128,42 @@ function ScannerPage() {
     const ctx = canvas.getContext('2d')
     ctx.drawImage(video, 0, 0)
     
-    const imageDataUrl = canvas.toDataURL('image/jpeg')
-    
-    setLoading(true)
-    setEmailSent(false)
-    setSendingEmail(false)
-    try {
-      const response = await fetch('http://localhost:5000/analyze-webcam', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ image: imageDataUrl })
+    // Convert canvas to blob and create file-like object
+    canvas.toBlob((blob) => {
+      // Create a File object from the blob
+      const capturedFile = new File([blob], `captured-${Date.now()}.jpg`, {
+        type: 'image/jpeg',
+        lastModified: Date.now()
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      
+      // Set this as the selected file (same as file upload)
+      setSelectedFile(capturedFile)
+      
+      // Clean up previous URL
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
       }
-
-      const data = await response.json()
-      console.log('Webcam analysis result:', data)
-      setResults(data)
-    } catch (error) {
-      console.error('Error analyzing webcam image:', error)
-      alert('Error analyzing webcam image. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+      
+      // Create preview URL (same as file upload)
+      const url = URL.createObjectURL(capturedFile)
+      setPreviewUrl(url)
+      setResults(null)
+      
+      console.log('Photo captured and stored:', capturedFile.name, capturedFile.size)
+      
+      // Stop webcam after capture
+      stopWebcam()
+      
+      // Switch to upload tab to show preview
+      setActiveTab('upload')
+      
+      // Optional: Auto-analyze the captured image
+      // You can remove this if you want manual analysis
+      setTimeout(() => {
+        analyzeImage()
+      }, 500)
+      
+    }, 'image/jpeg', 0.8) // 80% quality
   }
 
   const clearResults = () => {
@@ -363,7 +372,7 @@ function ScannerPage() {
                               : 'bg-green-600 text-white hover:bg-green-700'
                           }`}
                         >
-                          {loading ? 'Processing...' : 'Capture & Analyze'}
+                          {loading ? 'Capturing...' : 'Capture Photo'}
                         </button>
                         <button
                           onClick={stopWebcam}

@@ -29,7 +29,7 @@ function DatabasePage() {
       const response = await fetch('http://localhost:5000/persons')
       if (response.ok) {
         const data = await response.json()
-        setPersons(data.persons || [])
+        setPersons(data.data || [])
       } else {
         console.error('Failed to fetch persons')
       }
