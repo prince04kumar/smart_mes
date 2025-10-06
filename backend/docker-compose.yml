@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: smart-campus-mongodb
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: id_card_system
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - smart-campus-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: smart-campus-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - smart-campus-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  smart-campus-network:
+    driver: bridge

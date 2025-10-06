@@ -121,6 +121,14 @@ def analyze_id_card():
                     person_identified = True
                     print(f"🎯 Successfully identified by roll number: {roll_number}")
 
+        # Check if email is configured (initialize before conditional blocks)
+        smtp_enabled = all([
+            os.getenv('SMTP_ENABLED', 'false').lower() == 'true',
+            os.getenv('SMTP_HOST'),
+            os.getenv('SMTP_EMAIL'),
+            os.getenv('SMTP_PASSWORD')
+        ])
+
         # Send notification if person is identified
         if person_identified and person_data:
             print(f"🎯 FINAL PERSON IDENTIFIED: {person_data['name']}")
@@ -131,14 +139,6 @@ def analyze_id_card():
                 "file_name": file.filename
             }
             db_manager.add_scan_history(person_data['_id'], scan_data)
-            
-            # Check if email is configured
-            smtp_enabled = all([
-                os.getenv('SMTP_ENABLED', 'false').lower() == 'true',
-                os.getenv('SMTP_HOST'),
-                os.getenv('SMTP_EMAIL'),
-                os.getenv('SMTP_PASSWORD')
-            ])
             
             # Only send console notification for now - email will be sent via separate endpoint
             notification_sent = message_service.send_identification_message(
@@ -165,14 +165,6 @@ def analyze_id_card():
             "cache_key": cache_key if person_identified else None,
             "smtp_enabled": smtp_enabled
         })
-    except Exception as e:
-        print(f"Error in analyze_id_card: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Error analyzing Doc"
-        }), 500
-
     except Exception as e:
         print(f"Error in analyze_id_card: {str(e)}")
         return jsonify({

@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { Home, Scan, Database, Users } from 'lucide-react'
+import { ThemeToggle } from './theme-toggle'
 
 function Navbar() {
   const location = useLocation()
@@ -11,7 +12,7 @@ function Navbar() {
   ]
 
   return (
-    <nav className="bg-white shadow-lg border-b-4 border-blue-600">
+    <nav className="bg-card shadow-lg border-b border-border">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Institute Name */}
@@ -19,13 +20,13 @@ function Navbar() {
             <img 
               src="/collegeLOgo.jpg" 
               alt="Institute Logo" 
-              className="h-10 w-10 rounded-full object-cover"
+              className="h-10 w-10 rounded-full object-cover border-2 border-primary/20"
             />
             <div>
-              <h1 className="text-xl font-bold text-gray-800">
+              <h1 className="text-xl font-bold text-foreground">
                 Smart Campus
               </h1>
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-muted-foreground">
                 Doc Management System
               </p>
             </div>
@@ -43,8 +44,8 @@ function Navbar() {
                   to={item.path}
                   className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
                     isActive
-                      ? 'bg-blue-100 text-blue-700 border-2 border-blue-200'
-                      : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   }`}
                 >
                   <Icon className="w-4 h-4 mr-2" />
@@ -52,13 +53,12 @@ function Navbar() {
                 </Link>
               )
             })}
+            <ThemeToggle />
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="md:hidden">
-            <button className="text-gray-600 hover:text-blue-600">
-              <Users className="w-6 h-6" />
-            </button>
+          {/* Theme Toggle */}
+          <div className="flex items-center">
+            <ThemeToggle />
           </div>
         </div>
 
@@ -75,8 +75,8 @@ function Navbar() {
                   to={item.path}
                   className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium ${
                     isActive
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   }`}
                 >
                   <Icon className="w-4 h-4 mr-3" />

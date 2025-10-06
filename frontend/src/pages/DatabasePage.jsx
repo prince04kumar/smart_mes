@@ -3,6 +3,9 @@ import {
   Users, Plus, Search, Edit, Trash2, Mail, Phone, 
   BookOpen, Hash, Calendar, Eye, Download, Filter 
 } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 
 function DatabasePage() {
   const [persons, setPersons] = useState([])
@@ -127,72 +130,77 @@ function DatabasePage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div className="mb-4 md:mb-0">
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center">
-                <Users className="w-8 h-8 mr-3 text-blue-600" />
-                Database Management
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Manage student and staff records in the Doc system
-              </p>
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+              <div className="mb-4 md:mb-0">
+                <CardTitle className="text-3xl flex items-center">
+                  <Users className="w-8 h-8 mr-3 text-primary" />
+                  Database Management
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Manage student and staff records in the Doc system
+                </CardDescription>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button
+                  onClick={exportData}
+                  variant="outline"
+                  className="text-emerald-600 hover:text-emerald-700"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Data
+                </Button>
+                <Button
+                  onClick={() => setShowAddModal(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Person
+                </Button>
+              </div>
             </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={exportData}
-                className="flex items-center px-4 py-2 text-green-600 bg-green-100 rounded-lg hover:bg-green-200 transition-colors"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export Data
-              </button>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Person
-              </button>
-            </div>
-          </div>
+          </CardHeader>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{persons.length}</div>
-              <div className="text-blue-700 text-sm">Total Records</div>
-            </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{branches.length}</div>
-              <div className="text-green-700 text-sm">Departments</div>
-            </div>
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
-                {persons.filter(p => p.email).length}
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-primary/10 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-primary">{persons.length}</div>
+                <div className="text-muted-foreground text-sm">Total Records</div>
               </div>
-              <div className="text-purple-700 text-sm">With Email</div>
-            </div>
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-600">
-                {filteredPersons.length}
+              <div className="bg-emerald-500/10 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-emerald-600">{branches.length}</div>
+                <div className="text-muted-foreground text-sm">Departments</div>
               </div>
-              <div className="text-yellow-700 text-sm">Filtered Results</div>
+              <div className="bg-purple-500/10 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">
+                  {persons.filter(p => p.email).length}
+                </div>
+                <div className="text-muted-foreground text-sm">With Email</div>
+              </div>
+              <div className="bg-yellow-500/10 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-yellow-600">
+                  {filteredPersons.length}
+                </div>
+                <div className="text-muted-foreground text-sm">Filtered Results</div>
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Search and Filter */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="text"
                   placeholder="Search by name, roll number, or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -215,15 +223,16 @@ function DatabasePage() {
                 </select>
               </div>
             </div>
-          </div>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Persons Table */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <Card className="overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Loading...</span>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <span className="ml-2 text-muted-foreground">Loading...</span>
             </div>
           ) : (
             <>
@@ -337,7 +346,7 @@ function DatabasePage() {
               )}
             </>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Add Person Modal */}
