@@ -9,7 +9,10 @@ import numpy as np
 import cv2
 from database import db_manager
 from messaging import message_service
+from user_manager import user_manager
+from auth_middleware import require_auth, optional_auth, get_current_user
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -28,10 +31,145 @@ def health_check():
         "database": db_status
     })
 
+# Authentication Routes
+@app.route('/register', methods=['POST'])
+def register():
+    """Register a new user"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        name = data.get('name', '').strip()
+        organization = data.get('organization', '').strip()
+        
+        if not email or not password or not name:
+            return jsonify({"error": "Email, password, and name are required"}), 400
+        
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters long"}), 400
+        
+        result = user_manager.create_user(email, password, name, organization)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "message": result['message'],
+                "user_id": result['user_id']
+            }), 201
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['message']
+            }), 400
+            
+    except Exception as e:
+        print(f"Error in register: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/login', methods=['POST'])
+def login():
+    """Login user"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+        
+        result = user_manager.authenticate_user(email, password)
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['message']
+            }), 401
+            
+    except Exception as e:
+        print(f"Error in login: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/profile', methods=['GET'])
+@require_auth
+def get_profile():
+    """Get current user profile"""
+    try:
+        current_user = get_current_user()
+        user_id = current_user['user_id']
+        
+        result = user_manager.get_user_by_id(user_id)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "user": result['user']
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['message']
+            }), 404
+            
+    except Exception as e:
+        print(f"Error getting profile: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/update-email-settings', methods=['POST'])
+@require_auth
+def update_email_settings():
+    """Update user's email settings"""
+    try:
+        data = request.get_json()
+        current_user = get_current_user()
+        user_id = current_user['user_id']
+        
+        smtp_settings = {
+            "smtp_host": data.get('smtp_host'),
+            "smtp_port": data.get('smtp_port', 587),
+            "smtp_email": data.get('smtp_email'),
+            "smtp_password": data.get('smtp_password'),
+            "smtp_enabled": data.get('smtp_enabled', False)
+        }
+        
+        result = user_manager.update_email_settings(user_id, smtp_settings)
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error updating email settings: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route('/analyze-id', methods=['POST'])
+@optional_auth  # Make it optional for backward compatibility, but track user if logged in
 def analyze_id_card():
     print("=== Analyze Doc Request Received ===")
     try:
+        # Get current user if authenticated
+        current_user = get_current_user()
+        user_id = current_user['user_id'] if current_user else None
+        
+        # Increment user's scan count if authenticated
+        if user_id:
+            user_manager.increment_scan_count(user_id)
         # Get the uploaded file
         if 'image' not in request.files:
             print("Error: No image file in request")
@@ -132,11 +270,13 @@ def analyze_id_card():
         # Send notification if person is identified
         if person_identified and person_data:
             print(f"🎯 FINAL PERSON IDENTIFIED: {person_data['name']}")
-            # Add scan history
+            # Add scan history with user context
             scan_data = {
                 "source": "upload",
                 "extracted_data": results,
-                "file_name": file.filename
+                "file_name": file.filename,
+                "scanned_by_user": user_id,
+                "scanned_at": datetime.utcnow()
             }
             db_manager.add_scan_history(person_data['_id'], scan_data)
             
@@ -163,7 +303,12 @@ def analyze_id_card():
             "notification_sent": notification_sent,
             "message": "Doc analyzed successfully",
             "cache_key": cache_key if person_identified else None,
-            "smtp_enabled": smtp_enabled
+            "smtp_enabled": smtp_enabled,
+            "scanned_by": {
+                "user_id": user_id,
+                "email": current_user['email'] if current_user else None,
+                "name": current_user['name'] if current_user else None
+            } if current_user else None
         })
     except Exception as e:
         print(f"Error in analyze_id_card: {str(e)}")
@@ -174,9 +319,17 @@ def analyze_id_card():
         }), 500
 
 @app.route('/analyze-webcam', methods=['POST'])
+@optional_auth
 def analyze_webcam():
     print("=== Analyze Webcam Request Received ===")
     try:
+        # Get current user if authenticated
+        current_user = get_current_user()
+        user_id = current_user['user_id'] if current_user else None
+        
+        # Increment user's scan count if authenticated
+        if user_id:
+            user_manager.increment_scan_count(user_id)
         # Get base64 image from request
         data = request.get_json()
         if 'image' not in data:
@@ -576,6 +729,9 @@ if __name__ == '__main__':
     if db_manager.connect():
         print("🚀 Setting up sample data...")
         db_manager.setup_sample_data()
+        # Initialize user manager
+        user_manager.connect()
+        print("👤 User management system initialized")
     else:
         print("⚠️ Running without database connection")
     

@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Camera, Upload, RotateCcw, Scan } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 function ScannerPage() {
+  const { getAuthHeader } = useAuth()
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [results, setResults] = useState(null)
@@ -65,7 +67,8 @@ function ScannerPage() {
     try {
       const response = await fetch('http://localhost:5000/analyze-id', {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: getAuthHeader()
       })
 
       if (!response.ok) {
@@ -200,7 +203,8 @@ function ScannerPage() {
       const response = await fetch('http://localhost:5000/send-notification-email', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
         },
         body: JSON.stringify({
           person_id: results.person_data.person_id,

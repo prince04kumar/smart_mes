@@ -20,8 +20,8 @@ class DatabaseManager:
     def connect(self):
         """Connect to MongoDB"""
         try:
-            self.client = MongoClient(self.mongodb_uri)
-            # Test connection
+            self.client = MongoClient(self.mongodb_uri, serverSelectionTimeoutMS=5000)
+            # Test connection with timeout
             self.client.admin.command('ping')
             self.db = self.client[self.database_name]
             self.collection = self.db[self.collection_name]
