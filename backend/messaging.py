@@ -90,13 +90,8 @@ Doc Scanning System
 
             # Attach scanned document if provided
             if attachment_bytes and attachment_filename:
-                from email.mime.base import MIMEBase
-                from email import encoders
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(attachment_bytes)
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename="{attachment_filename}"')
-                msg.attach(part)
+                # Handle image attachments properly
+                self._attach_image_to_email(msg, attachment_bytes, attachment_filename)
 
             # Create secure connection and send email
             context = ssl.create_default_context()
@@ -118,6 +113,67 @@ Doc Scanning System
             print(f"Message:\n{message}")
             print("=" * 60)
             return False
+    
+    def _attach_image_to_email(self, msg, image_bytes, filename):
+        """Attach image to email with proper MIME type"""
+        try:
+            from email.mime.image import MIMEImage
+            from email.mime.base import MIMEBase
+            from email import encoders
+            import imghdr
+            import io
+            from PIL import Image
+            
+            # Convert bytes to PIL Image and ensure it's in JPEG format
+            try:
+                # Try to open as image
+                image = Image.open(io.BytesIO(image_bytes))
+                
+                # Convert to RGB if necessary (for JPEG compatibility)
+                if image.mode in ('RGBA', 'LA', 'P'):
+                    # Create white background for transparent images
+                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    if image.mode == 'P':
+                        image = image.convert('RGBA')
+                    background.paste(image, mask=image.split()[-1] if image.mode in ('RGBA', 'LA') else None)
+                    image = background
+                elif image.mode != 'RGB':
+                    image = image.convert('RGB')
+                
+                # Save as JPEG to BytesIO
+                output = io.BytesIO()
+                image.save(output, format='JPEG', quality=95, optimize=True)
+                jpeg_bytes = output.getvalue()
+                
+                # Ensure filename has .jpg extension
+                if not filename.lower().endswith(('.jpg', '.jpeg')):
+                    filename = filename.rsplit('.', 1)[0] + '.jpg'
+                
+                # Create MIMEImage with proper subtype
+                img_attachment = MIMEImage(jpeg_bytes, _subtype='jpeg')
+                img_attachment.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                img_attachment.add_header('Content-ID', f'<{filename}>')
+                
+                msg.attach(img_attachment)
+                print(f"✅ Image attached as JPEG: {filename}")
+                
+            except Exception as img_error:
+                print(f"⚠️ Could not process as image, attaching as binary: {img_error}")
+                # Fallback: attach as generic binary
+                part = MIMEBase('image', 'jpeg')
+                part.set_payload(image_bytes)
+                encoders.encode_base64(part)
+                
+                # Ensure .jpg extension
+                if not filename.lower().endswith(('.jpg', '.jpeg')):
+                    filename = filename.rsplit('.', 1)[0] + '.jpg'
+                    
+                part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                msg.attach(part)
+                print(f"✅ Binary attachment added: {filename}")
+                
+        except Exception as e:
+            print(f"❌ Error attaching image: {str(e)}")
     
     def _create_html_message(self, text_message):
         """Convert text message to HTML format"""
