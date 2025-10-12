@@ -2,8 +2,10 @@
 import { Scan, Database, Users, Shield, Zap, Clock } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import useDocumentTitle from '../hooks/useDocumentTitle'
 
 function HomePage() {
+  useDocumentTitle('Home');
   const features = [
     {
       icon: Scan,

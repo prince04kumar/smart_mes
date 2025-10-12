@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { Camera, Upload, RotateCcw, Scan } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import API_BASE_URL from '../config/api'
+import useDocumentTitle from '../hooks/useDocumentTitle'
 
 function ScannerPage() {
+  useDocumentTitle('Doc Scanner');
   const { getAuthHeader } = useAuth()
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)

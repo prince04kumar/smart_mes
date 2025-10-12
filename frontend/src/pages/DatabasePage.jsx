@@ -8,8 +8,10 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { useAuth } from '../context/AuthContext'
 import API_BASE_URL from '../config/api'
+import useDocumentTitle from '../hooks/useDocumentTitle'
 
 function DatabasePage() {
+  useDocumentTitle('Database');
   const { getAuthHeader } = useAuth()
   const [persons, setPersons] = useState([])
   const [loading, setLoading] = useState(true)
