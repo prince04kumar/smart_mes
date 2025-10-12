@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Connection Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .test-name {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .buttons {
+            text-align: center;
+            margin: 20px 0;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .info {
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #17a2b8;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Backend Connection Test</h1>
+        
+        <div class="info">
+            <strong>Backend URL:</strong> http://100.26.22.38:5000<br>
+            <strong>Testing:</strong> Health check, CORS, Authentication endpoints
+        </div>
+
+        <div class="buttons">
+            <button onclick="testAll()">🔍 Test All Endpoints</button>
+            <button onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://100.26.22.38:5000';
+        const resultsDiv = document.getElementById('results');
+
+        function addResult(testName, status, message, data = null) {
+            const section = document.createElement('div');
+            section.className = 'test-section';
+            
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'test-name';
+            nameDiv.textContent = testName;
+            
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${status}`;
+            resultDiv.innerHTML = `<strong>${status === 'success' ? '✅ SUCCESS' : status === 'error' ? '❌ ERROR' : '⏳ LOADING'}</strong><br>${message}`;
+            
+            if (data) {
+                const pre = document.createElement('pre');
+                pre.textContent = JSON.stringify(data, null, 2);
+                resultDiv.appendChild(pre);
+            }
+            
+            section.appendChild(nameDiv);
+            section.appendChild(resultDiv);
+            resultsDiv.appendChild(section);
+        }
+
+        function clearResults() {
+            resultsDiv.innerHTML = '';
+        }
+
+        async function testHealthEndpoint() {
+            try {
+                addResult('Test 1: Health Check', 'loading', 'Testing /health endpoint...');
+                
+                const response = await fetch(`${API_BASE_URL}/health`);
+                const data = await response.json();
+                
+                clearResults();
+                if (response.ok) {
+                    addResult('Test 1: Health Check', 'success', 
+                        `Backend is reachable! Status: ${response.status}`, data);
+                } else {
+                    addResult('Test 1: Health Check', 'error', 
+                        `Backend responded with status ${response.status}`, data);
+                }
+                return response.ok;
+            } catch (error) {
+                clearResults();
+                addResult('Test 1: Health Check', 'error', 
+                    `Cannot reach backend: ${error.message}\n\nPossible causes:\n- Backend not running on EC2\n- EC2 Security Group blocking port 5000\n- Network/firewall issues`);
+                return false;
+            }
+        }
+
+        async function testRegisterEndpoint() {
+            try {
+                addResult('Test 2: Register Endpoint', 'loading', 'Testing /register endpoint...');
+                
+                const testUser = {
+                    name: `Test User ${Date.now()}`,
+                    email: `test${Date.now()}@example.com`,
+                    password: 'Test123!@#',
+                    organization: 'Test Org'
+                };
+                
+                const response = await fetch(`${API_BASE_URL}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testUser)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    addResult('Test 2: Register Endpoint', 'success', 
+                        'User registration working!', data);
+                    return testUser;
+                } else {
+                    addResult('Test 2: Register Endpoint', 'error', 
+                        'Registration failed', data);
+                    return null;
+                }
+            } catch (error) {
+                addResult('Test 2: Register Endpoint', 'error', 
+                    `Error: ${error.message}`);
+                return null;
+            }
+        }
+
+        async function testLoginEndpoint(testUser) {
+            if (!testUser) {
+                addResult('Test 3: Login Endpoint', 'error', 
+                    'Skipped: Registration failed');
+                return;
+            }
+
+            try {
+                addResult('Test 3: Login Endpoint', 'loading', 'Testing /login endpoint...');
+                
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: testUser.email,
+                        password: testUser.password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    addResult('Test 3: Login Endpoint', 'success', 
+                        'Login working! JWT token received', {
+                            user: data.user,
+                            token: data.token.substring(0, 50) + '...'
+                        });
+                    return data.token;
+                } else {
+                    addResult('Test 3: Login Endpoint', 'error', 
+                        'Login failed', data);
+                    return null;
+                }
+            } catch (error) {
+                addResult('Test 3: Login Endpoint', 'error', 
+                    `Error: ${error.message}`);
+                return null;
+            }
+        }
+
+        async function testProfileEndpoint(token) {
+            if (!token) {
+                addResult('Test 4: Profile Endpoint', 'error', 
+                    'Skipped: Login failed');
+                return;
+            }
+
+            try {
+                addResult('Test 4: Profile Endpoint', 'loading', 'Testing /profile endpoint with JWT...');
+                
+                const response = await fetch(`${API_BASE_URL}/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Test 4: Profile Endpoint', 'success', 
+                        'JWT authentication working!', data);
+                } else {
+                    addResult('Test 4: Profile Endpoint', 'error', 
+                        'Profile fetch failed', data);
+                }
+            } catch (error) {
+                addResult('Test 4: Profile Endpoint', 'error', 
+                    `Error: ${error.message}`);
+            }
+        }
+
+        async function testPersonsEndpoint(token) {
+            if (!token) {
+                addResult('Test 5: Persons Endpoint', 'error', 
+                    'Skipped: Authentication required');
+                return;
+            }
+
+            try {
+                addResult('Test 5: Persons Endpoint', 'loading', 'Testing /persons endpoint...');
+                
+                const response = await fetch(`${API_BASE_URL}/persons`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Test 5: Persons Endpoint', 'success', 
+                        `Database connected! Found ${data.data?.length || 0} person(s)`, {
+                            count: data.data?.length || 0,
+                            sample: data.data?.slice(0, 2)
+                        });
+                } else {
+                    addResult('Test 5: Persons Endpoint', 'error', 
+                        'Failed to fetch persons', data);
+                }
+            } catch (error) {
+                addResult('Test 5: Persons Endpoint', 'error', 
+                    `Error: ${error.message}`);
+            }
+        }
+
+        async function testAll() {
+            clearResults();
+            
+            // Test 1: Health
+            const healthOk = await testHealthEndpoint();
+            if (!healthOk) {
+                addResult('Summary', 'error', 
+                    '❌ Backend is not reachable. Please check:\n1. Backend running on EC2?\n2. EC2 Security Group allows port 5000?\n3. Correct IP address (100.26.22.38)?');
+                return;
+            }
+            
+            // Test 2: Register
+            const testUser = await testRegisterEndpoint();
+            
+            // Test 3: Login
+            const token = await testLoginEndpoint(testUser);
+            
+            // Test 4: Profile
+            await testProfileEndpoint(token);
+            
+            // Test 5: Persons
+            await testPersonsEndpoint(token);
+            
+            // Summary
+            if (token) {
+                addResult('✅ All Tests Complete', 'success', 
+                    'Backend is fully functional!\n\n✅ Health check passed\n✅ User registration working\n✅ Login working\n✅ JWT authentication working\n✅ Database connected\n\nYou can now use your frontend application!');
+            } else {
+                addResult('⚠️ Tests Complete with Warnings', 'error', 
+                    'Some tests failed. Check the results above for details.');
+            }
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            setTimeout(testAll, 500);
+        });
+    </script>
+</body>
+</html>

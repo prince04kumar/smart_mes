@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Camera, Upload, RotateCcw, Scan } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import API_BASE_URL from '../config/api'
 
 function ScannerPage() {
   const { getAuthHeader } = useAuth()
@@ -65,7 +66,7 @@ function ScannerPage() {
     formData.append('image', selectedFile)
 
     try {
-      const response = await fetch('http://localhost:5000/analyze-id', {
+      const response = await fetch(`${API_BASE_URL}/analyze-id`, {
         method: 'POST',
         body: formData,
         headers: getAuthHeader()
@@ -200,7 +201,7 @@ function ScannerPage() {
     setEmailSent(false)
 
     try {
-      const response = await fetch('http://localhost:5000/send-notification-email', {
+      const response = await fetch(`${API_BASE_URL}/send-notification-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
