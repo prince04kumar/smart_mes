@@ -1,15 +1,24 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Scan, Database, Users } from 'lucide-react'
+import { Home, Scan, Database, LogOut, User } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
+import { useAuth } from '../context/AuthContext'
+import { Button } from './ui/button'
 
 function Navbar() {
   const location = useLocation()
+  const { user, logout } = useAuth()
 
   const navItems = [
     { path: '/', label: 'Home', icon: Home },
     { path: '/scanner', label: 'ID Scanner', icon: Scan },
     { path: '/database', label: 'Database', icon: Database },
   ]
+
+  const handleLogout = () => {
+    if (confirm('Are you sure you want to logout?')) {
+      logout()
+    }
+  }
 
   return (
     <nav className="bg-card shadow-lg border-b border-border">
@@ -56,9 +65,23 @@ function Navbar() {
             <ThemeToggle />
           </div>
 
-          {/* Theme Toggle */}
-          <div className="flex items-center">
+          {/* User Info and Actions */}
+          <div className="flex items-center space-x-3">
+            <div className="hidden md:flex items-center space-x-2 text-sm">
+              <User className="w-4 h-4 text-muted-foreground" />
+              <span className="text-foreground font-medium">{user?.name}</span>
+              <span className="text-muted-foreground">({user?.scan_count || 0} scans)</span>
+            </div>
             <ThemeToggle />
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden md:inline ml-2">Logout</span>
+            </Button>
           </div>
         </div>
 

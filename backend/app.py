@@ -7,31 +7,210 @@ import io
 from PIL import Image
 import numpy as np
 import cv2
-from database import db_manager
+from supabase_manager import SupabaseManager
+from supabase_user_manager import SupabaseUserManager
 from messaging import message_service
+from supabase_auth_middleware import require_auth, optional_auth, get_current_user
 import os
+from datetime import datetime
+import io
+from PIL import Image
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Initialize Supabase database manager
+db_manager = SupabaseManager()
+
+# Initialize Supabase user manager
+user_manager = SupabaseUserManager()
+
 # Initialize AWS Textract client
 textract = boto3.client("textract", region_name="us-east-1")
+
+def convert_to_jpeg(image_bytes):
+    """Convert image bytes to JPEG format"""
+    try:
+        # Open image from bytes
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # Convert to RGB if necessary (for JPEG compatibility)
+        if image.mode in ('RGBA', 'LA', 'P'):
+            # Create white background for transparent images
+            background = Image.new('RGB', image.size, (255, 255, 255))
+            if image.mode == 'P':
+                image = image.convert('RGBA')
+            background.paste(image, mask=image.split()[-1] if image.mode in ('RGBA', 'LA') else None)
+            image = background
+        elif image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Save as JPEG to BytesIO with high quality
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=95, optimize=True)
+        jpeg_bytes = output.getvalue()
+        
+        print(f"✅ Image converted to JPEG. Original: {len(image_bytes)} bytes, JPEG: {len(jpeg_bytes)} bytes")
+        return jpeg_bytes
+        
+    except Exception as e:
+        print(f"⚠️ Could not convert to JPEG: {e}. Using original bytes.")
+        return image_bytes
 
 @app.route('/health', methods=['GET'])
 def health_check():
     print("Health check endpoint called")
     # Check database connection
-    db_status = "connected" if db_manager.client else "disconnected"
+    try:
+        db_status = "connected" if db_manager.test_connection() else "disconnected"
+    except:
+        db_status = "disconnected"
     return jsonify({
         "status": "healthy", 
         "message": "Flask server is running",
-        "database": db_status
+        "database": db_status,
+        "database_type": "Supabase"
     })
 
+# Authentication Routes
+@app.route('/register', methods=['POST'])
+def register():
+    """Register a new user"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        name = data.get('name', '').strip()
+        organization = data.get('organization', '').strip()
+        
+        if not email or not password or not name:
+            return jsonify({"error": "Email, password, and name are required"}), 400
+        
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters long"}), 400
+        
+        result = user_manager.create_user(email, password, name, organization)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "message": result['message'],
+                "user_id": result['user_id']
+            }), 201
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['message']
+            }), 400
+            
+    except Exception as e:
+        print(f"Error in register: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/login', methods=['POST'])
+def login():
+    """Login user"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+        
+        result = user_manager.authenticate_user(email, password)
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['message']
+            }), 401
+            
+    except Exception as e:
+        print(f"Error in login: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/profile', methods=['GET'])
+@require_auth
+def get_profile():
+    """Get current user profile"""
+    try:
+        current_user = get_current_user()
+        user_id = current_user['user_id']
+        
+        result = user_manager.get_user_by_id(user_id)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "user": result['user']
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['message']
+            }), 404
+            
+    except Exception as e:
+        print(f"Error getting profile: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/update-email-settings', methods=['POST'])
+@require_auth
+def update_email_settings():
+    """Update user's email settings"""
+    try:
+        data = request.get_json()
+        current_user = get_current_user()
+        user_id = current_user['user_id']
+        
+        smtp_settings = {
+            "smtp_host": data.get('smtp_host'),
+            "smtp_port": data.get('smtp_port', 587),
+            "smtp_email": data.get('smtp_email'),
+            "smtp_password": data.get('smtp_password'),
+            "smtp_enabled": data.get('smtp_enabled', False)
+        }
+        
+        result = user_manager.update_email_settings(user_id, smtp_settings)
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error updating email settings: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route('/analyze-id', methods=['POST'])
+@optional_auth  # Make it optional for backward compatibility, but track user if logged in
 def analyze_id_card():
     print("=== Analyze Doc Request Received ===")
     try:
+        # Get current user if authenticated
+        current_user = get_current_user()
+        user_id = current_user['user_id'] if current_user else None
+        
+        # Increment user's scan count if authenticated
+        if user_id:
+            user_manager.increment_scan_count(user_id)
         # Get the uploaded file
         if 'image' not in request.files:
             print("Error: No image file in request")
@@ -45,16 +224,21 @@ def analyze_id_card():
         # Read image file
         image_bytes = file.read()
         print(f"Image size: {len(image_bytes)} bytes")
+        
+        # Convert to JPEG format for email compatibility
+        jpeg_bytes = convert_to_jpeg(image_bytes)
 
-        # Store image in Redis cache
+        # Store JPEG image in Redis cache
         from cache_service import cache_service
-        cache_key = f"scan:{file.filename}:{int(time.time())}"
-        cache_service.set_document(cache_key, image_bytes)
+        # Ensure cache key has .jpg extension
+        base_filename = file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename
+        cache_key = f"scan:{base_filename}.jpg:{int(time.time())}"
+        cache_service.set_document(cache_key, jpeg_bytes)
 
         print("Sending to AWS Textract...")
         # Analyze document with AWS Textract - same as textract2.py
         response = textract.analyze_document(
-            Document={"Bytes": image_bytes},
+            Document={"Bytes": jpeg_bytes},
             FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
@@ -132,13 +316,21 @@ def analyze_id_card():
         # Send notification if person is identified
         if person_identified and person_data:
             print(f"🎯 FINAL PERSON IDENTIFIED: {person_data['name']}")
-            # Add scan history
+            # Add scan history with user context
             scan_data = {
                 "source": "upload",
                 "extracted_data": results,
-                "file_name": file.filename
+                "file_name": file.filename,
+                "scanned_by_user": user_id,
+                "scanned_at": datetime.now().isoformat()
             }
-            db_manager.add_scan_history(person_data['_id'], scan_data)
+            db_manager.add_scan_history(
+                person_id=person_data['id'], 
+                scanned_text=f"Upload scan: {file.filename}",
+                confidence_score=results.get('StudentName', {}).get('confidence', 0),
+                document_type="Upload",
+                extracted_data=scan_data
+            )
             
             # Only send console notification for now - email will be sent via separate endpoint
             notification_sent = message_service.send_identification_message(
@@ -158,12 +350,17 @@ def analyze_id_card():
                 "email": person_data.get('email') if person_data else None,
                 "roll_number": person_data.get('roll_number') if person_data else None,
                 "branch": person_data.get('branch') if person_data else None,
-                "person_id": str(person_data.get('_id')) if person_data else None
+                "person_id": person_data.get('id') if person_data else None
             } if person_data else None,
             "notification_sent": notification_sent,
             "message": "Doc analyzed successfully",
             "cache_key": cache_key if person_identified else None,
-            "smtp_enabled": smtp_enabled
+            "smtp_enabled": smtp_enabled,
+            "scanned_by": {
+                "user_id": user_id,
+                "email": current_user['email'] if current_user else None,
+                "name": current_user['name'] if current_user else None
+            } if current_user else None
         })
     except Exception as e:
         print(f"Error in analyze_id_card: {str(e)}")
@@ -174,9 +371,17 @@ def analyze_id_card():
         }), 500
 
 @app.route('/analyze-webcam', methods=['POST'])
+@optional_auth
 def analyze_webcam():
     print("=== Analyze Webcam Request Received ===")
     try:
+        # Get current user if authenticated
+        current_user = get_current_user()
+        user_id = current_user['user_id'] if current_user else None
+        
+        # Increment user's scan count if authenticated
+        if user_id:
+            user_manager.increment_scan_count(user_id)
         # Get base64 image from request
         data = request.get_json()
         if 'image' not in data:
@@ -188,16 +393,19 @@ def analyze_webcam():
         image_data = data['image'].split(',')[1]  # Remove data:image/jpeg;base64, prefix
         image_bytes = base64.b64decode(image_data)
         print(f"Decoded image size: {len(image_bytes)} bytes")
+        
+        # Convert to JPEG format for email compatibility
+        jpeg_bytes = convert_to_jpeg(image_bytes)
 
-        # Store webcam image in Redis cache
+        # Store JPEG webcam image in Redis cache
         from cache_service import cache_service
         cache_key = f"scan:webcam:{int(time.time())}.jpg"
-        cache_service.set_document(cache_key, image_bytes)
+        cache_service.set_document(cache_key, jpeg_bytes)
 
         print("Sending to AWS Textract...")
         # Analyze document with AWS Textract - same as textract2.py
         response = textract.analyze_document(
-            Document={"Bytes": image_bytes},
+            Document={"Bytes": jpeg_bytes},
             FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
@@ -278,9 +486,16 @@ def analyze_webcam():
             # Add scan history
             scan_data = {
                 "source": "webcam",
-                "extracted_data": results
+                "extracted_data": results,
+                "scanned_at": datetime.now().isoformat()
             }
-            db_manager.add_scan_history(person_data['_id'], scan_data)
+            db_manager.add_scan_history(
+                person_id=person_data['id'], 
+                scanned_text="Webcam scan",
+                confidence_score=results.get('StudentName', {}).get('confidence', 0),
+                document_type="Webcam",
+                extracted_data=scan_data
+            )
             
             # Only send console notification for now - email will be sent via separate endpoint
             notification_sent = message_service.send_identification_message(
@@ -300,7 +515,7 @@ def analyze_webcam():
                 "email": person_data.get('email') if person_data else None,
                 "roll_number": person_data.get('roll_number') if person_data else None,
                 "branch": person_data.get('branch') if person_data else None,
-                "person_id": str(person_data.get('_id')) if person_data else None
+                "person_id": person_data.get('id') if person_data else None
             } if person_data else None,
             "notification_sent": notification_sent,
             "message": "Webcam image analyzed successfully",
@@ -323,9 +538,7 @@ def get_all_persons():
     """Get all persons in the database"""
     try:
         persons = db_manager.get_all_persons()
-        # Convert ObjectId to string for JSON serialization
-        for person in persons:
-            person['_id'] = str(person['_id'])
+        # No need to convert IDs - Supabase returns standard integers
         
         return jsonify({
             "success": True,
@@ -367,7 +580,7 @@ def create_person():
         if person_id:
             return jsonify({
                 "success": True,
-                "data": {"person_id": str(person_id)},
+                "data": {"person_id": person_id},
                 "message": "Person created successfully"
             })
         else:
@@ -389,10 +602,37 @@ def create_person():
 def setup_sample_data():
     """Setup sample data in the database"""
     try:
-        db_manager.setup_sample_data()
+        # Create sample students
+        sample_students = [
+            {
+                "name": "Alice Johnson",
+                "roll_number": "CS2024001", 
+                "branch": "Computer Science",
+                "email": "alice.johnson@university.edu"
+            },
+            {
+                "name": "Bob Smith",
+                "roll_number": "EE2024002",
+                "branch": "Electrical Engineering", 
+                "email": "bob.smith@university.edu"
+            },
+            {
+                "name": "Charlie Brown",
+                "roll_number": "ME2024003",
+                "branch": "Mechanical Engineering",
+                "email": "charlie.brown@university.edu"
+            }
+        ]
+        
+        created_count = 0
+        for student in sample_students:
+            person_id = db_manager.create_person(**student)
+            if person_id:
+                created_count += 1
+        
         return jsonify({
             "success": True,
-            "message": "Sample data setup completed"
+            "message": f"Sample data setup completed. Created {created_count} students."
         })
     except Exception as e:
         print(f"Error setting up sample data: {str(e)}")
@@ -418,8 +658,8 @@ def send_notification_email():
             return jsonify({"error": "Missing person_id or cache_key"}), 400
         
         # Get person data from database
-        from bson import ObjectId
-        person_data = db_manager.collection.find_one({"_id": ObjectId(person_id)})
+        person_data = db_manager.supabase.table('persons').select('*').eq('id', person_id).execute()
+        person_data = person_data.data[0] if person_data.data else None
         
         if not person_data:
             return jsonify({"error": "Person not found in database"}), 404
@@ -507,15 +747,12 @@ def get_email_status():
             "message": "Error retrieving email status"
         }), 500
 
-@app.route('/persons', methods=['GET'])
-def get_persons():
-    """Get all persons from database"""
+@app.route('/persons-list', methods=['GET'])
+def get_persons_list():
+    """Get all persons from database (alternative endpoint)"""
     try:
         persons = db_manager.get_all_persons()
-        
-        # Convert ObjectId to string for JSON serialization
-        for person in persons:
-            person['_id'] = str(person['_id'])
+        # No need to convert IDs - Supabase returns standard integers
         
         return jsonify({
             "success": True,
@@ -572,11 +809,17 @@ def create_person_endpoint():
         }), 500
 
 if __name__ == '__main__':
-    # Initialize database connection
-    if db_manager.connect():
-        print("🚀 Setting up sample data...")
-        db_manager.setup_sample_data()
-    else:
+    # Test Supabase connection
+    try:
+        if db_manager.test_connection():
+            print("🚀 Supabase database connected successfully!")
+            # Initialize user manager
+            user_manager.connect()
+            print("👤 User management system initialized")
+        else:
+            print("⚠️ Running without database connection")
+    except Exception as e:
+        print(f"⚠️ Database connection error: {e}")
         print("⚠️ Running without database connection")
     
     app.run(debug=True, host='0.0.0.0', port=5000)

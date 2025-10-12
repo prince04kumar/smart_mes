@@ -6,8 +6,13 @@ import {
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { useAuth } from '../context/AuthContext'
+import API_BASE_URL from '../config/api'
+import useDocumentTitle from '../hooks/useDocumentTitle'
 
 function DatabasePage() {
+  useDocumentTitle('Database');
+  const { getAuthHeader } = useAuth()
   const [persons, setPersons] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -29,7 +34,9 @@ function DatabasePage() {
   const fetchPersons = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/persons')
+      const response = await fetch(`${API_BASE_URL}/persons`, {
+        headers: getAuthHeader()
+      })
       if (response.ok) {
         const data = await response.json()
         setPersons(data.data || [])
@@ -46,10 +53,11 @@ function DatabasePage() {
   // Add new person
   const addPerson = async (personData) => {
     try {
-      const response = await fetch('http://localhost:5000/create-person', {
+      const response = await fetch(`${API_BASE_URL}/create-person`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
         },
         body: JSON.stringify(personData)
       })

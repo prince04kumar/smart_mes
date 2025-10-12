@@ -1,0 +1,17 @@
+{
+  "name": "Smart Campus",
+  "short_name": "Smart Campus",
+  "description": "Intelligent Document Processing System with AWS Textract",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#667eea",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/collegeLOgo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
