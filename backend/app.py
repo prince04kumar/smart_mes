@@ -17,7 +17,51 @@ import io
 from PIL import Image
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+# Enable CORS for all routes - allows frontend from localhost and Vercel
+CORS(app, 
+    resources={
+        r"/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://localhost:5174",
+                "https://smart-mes-git-main-princekumar72131-8019s-projects.vercel.app"
+            ],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+            "allow_headers": [
+                "Content-Type", 
+                "Authorization",
+                "Access-Control-Allow-Credentials"
+            ],
+            "supports_credentials": True,
+            "expose_headers": ["Content-Range", "X-Content-Range"],
+            "max_age": 3600
+        }
+    }
+)
+
+# Add CORS headers to all responses for Vercel compatibility
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    
+    # List of allowed origins
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://smart-mes-git-main-princekumar72131-8019s-projects.vercel.app"
+    ]
+    
+    # Check if origin is in allowed list
+    if origin in allowed_origins:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    
+    return response
 
 # Initialize Supabase database manager
 db_manager = SupabaseManager()
