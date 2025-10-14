@@ -101,6 +101,110 @@ def convert_to_jpeg(image_bytes):
         print(f"⚠️ Could not convert to JPEG: {e}. Using original bytes.")
         return image_bytes
 
+def find_person_with_fuzzy_match(results, db_manager):
+    """
+    Find person in database with fuzzy name matching.
+    Handles variations like "Dr M.V. Katve" vs "Dr. M.V. Katwe"
+    """
+    person_identified = False
+    person_data = None
+    
+    # Extract all possible names from results
+    possible_names = []
+
+    # Check PersonName alias (generic name query)
+    person_name = results.get('PersonName', {}).get('value', '').strip()
+    if person_name and person_name.lower() not in ['not found', '', 'none', 'n/a']:
+        # Split multiple names if comma or newline separated
+        names = [n.strip() for n in person_name.replace('\n', ',').split(',')]
+        possible_names.extend([n for n in names if n and len(n) > 2])
+
+    # Check FacultyName alias
+    faculty_name = results.get('FacultyName', {}).get('value', '').strip()
+    if faculty_name and faculty_name.lower() not in ['not found', '', 'none', 'n/a']:
+        possible_names.append(faculty_name)
+
+    # Check StudentName alias (backward compatibility)
+    student_name = results.get('StudentName', {}).get('value', '').strip()
+    if student_name and student_name.lower() not in ['not found', '', 'none', 'n/a']:
+        possible_names.append(student_name)
+
+    # Check Unknown alias (sometimes Textract puts names here)
+    unknown_value = results.get('Unknown', {}).get('value', '').strip()
+    if unknown_value and unknown_value.lower() not in ['not found', '', 'none', 'n/a']:
+        possible_names.append(unknown_value)
+
+    # Try to find person by any possible name (with fuzzy matching)
+    print(f"🔍 Trying to identify person from possible names: {possible_names}")
+    
+    for name in possible_names:
+        # Try exact match first
+        person_data = db_manager.find_person_by_name(name)
+        if person_data:
+            person_identified = True
+            print(f"✅ Exact match found: '{name}' -> {person_data['name']}")
+            break
+        
+        # Try partial/fuzzy match (handles "Dr M.V. Katve" vs "Dr. M.V. Katwe")
+        # Remove dots, extra spaces, and lowercase for comparison
+        normalized_search = name.replace('.', '').replace('  ', ' ').strip().lower()
+        
+        # Get all persons for comparison
+        all_persons = db_manager.get_all_persons()
+        best_match = None
+        best_score = 0
+        
+        for person in all_persons:
+            db_name_original = person['name']
+            db_name = db_name_original.replace('.', '').replace('  ', ' ').strip().lower()
+            
+            # Calculate similarity score
+            # 1. Substring match
+            if normalized_search in db_name:
+                score = len(normalized_search) / len(db_name)
+                if score > best_score:
+                    best_score = score
+                    best_match = person
+            elif db_name in normalized_search:
+                score = len(db_name) / len(normalized_search)
+                if score > best_score:
+                    best_score = score
+                    best_match = person
+            
+            # 2. Word-by-word match (handles "M V Katve" vs "M.V. Katwe")
+            search_words = set(normalized_search.split())
+            db_words = set(db_name.split())
+            common_words = search_words & db_words
+            if common_words and len(common_words) >= 2:  # At least 2 words match
+                score = len(common_words) / max(len(search_words), len(db_words))
+                if score > best_score:
+                    best_score = score
+                    best_match = person
+        
+        # Accept match if score > 60%
+        if best_match and best_score > 0.6:
+            print(f"✅ Fuzzy match found ({best_score:.0%} confidence): '{name}' -> {best_match['name']}")
+            person_data = best_match
+            person_identified = True
+            break
+    
+    # If not found by name, try by roll number or ID
+    if not person_identified:
+        id_number = results.get('IDNumber', {}).get('value', '').strip()
+        if not id_number:
+            id_number = results.get('RollNumber', {}).get('value', '').strip()
+        
+        if id_number and id_number.lower() not in ['not found', '', 'none', 'n/a']:
+            person_data = db_manager.find_person_by_roll_number(id_number)
+            if person_data:
+                person_identified = True
+                print(f"✅ Found by ID/Roll: {id_number} -> {person_data['name']}")
+    
+    if not person_identified:
+        print(f"❌ No match found in database. Tried names: {possible_names}")
+    
+    return person_identified, person_data
+
 @app.route('/health', methods=['GET'])
 def health_check():
     print("Health check endpoint called")
@@ -280,15 +384,16 @@ def analyze_id_card():
         cache_service.set_document(cache_key, jpeg_bytes)
 
         print("Sending to AWS Textract...")
-        # Analyze document with AWS Textract - same as textract2.py
+        # Analyze document with AWS Textract - Generic queries for any person
         response = textract.analyze_document(
             Document={"Bytes": jpeg_bytes},
             FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
-                    {"Text": "What is the student's name on the Doc?", "Alias": "StudentName"},
-                    # {"Text": "What is the roll number?", "Alias": "RollNumber"},
-                    # {"Text": "What is the branch?", "Alias": "Branch"},
+                    {"Text": "What are the names of people mentioned in this document?", "Alias": "PersonName"},
+                    {"Text": "Who is the Lab Incharge or faculty member?", "Alias": "FacultyName"},
+                    {"Text": "What is the roll number or employee ID?", "Alias": "IDNumber"},
+                    {"Text": "What is the department or branch?", "Alias": "Department"},
                 ]
             }
         )
@@ -313,41 +418,9 @@ def analyze_id_card():
 
         print("Upload Results:", results)
 
-        # 🔍 IMPROVED PERSON IDENTIFICATION AND NOTIFICATION
-        person_identified = False
-        person_data = None
+        # 🔍 IMPROVED PERSON IDENTIFICATION WITH FUZZY MATCHING
+        person_identified, person_data = find_person_with_fuzzy_match(results, db_manager)
         notification_sent = False
-
-        # Extract all possible names from results (including Unknown alias)
-        possible_names = []
-
-        # Check StudentName alias
-        student_name = results.get('StudentName', {}).get('value', '').strip()
-        if student_name and student_name.lower() not in ['not found', '', 'none']:
-            possible_names.append(student_name)
-
-        # Check Unknown alias (sometimes Textract puts names here)
-        unknown_value = results.get('Unknown', {}).get('value', '').strip()
-        if unknown_value and unknown_value.lower() not in ['not found', '', 'none']:
-            possible_names.append(unknown_value)
-
-        # Try to find person by any possible name
-        print(f"🔍 Trying to identify person from possible names: {possible_names}")
-        for name in possible_names:
-            person_data = db_manager.find_person_by_name(name)
-            if person_data:
-                person_identified = True
-                print(f"🎯 Successfully identified by name: '{name}' -> {person_data['name']}")
-                break
-
-        # If not found by name, try by roll number
-        if not person_identified:
-            roll_number = results.get('RollNumber', {}).get('value', '').strip()
-            if roll_number and roll_number.lower() not in ['not found', '', 'none']:
-                person_data = db_manager.find_person_by_roll_number(roll_number)
-                if person_data:
-                    person_identified = True
-                    print(f"🎯 Successfully identified by roll number: {roll_number}")
 
         # Check if email is configured (initialize before conditional blocks)
         smtp_enabled = all([
@@ -371,7 +444,7 @@ def analyze_id_card():
             db_manager.add_scan_history(
                 person_id=person_data['id'], 
                 scanned_text=f"Upload scan: {file.filename}",
-                confidence_score=results.get('StudentName', {}).get('confidence', 0),
+                confidence_score=results.get('PersonName', {}).get('confidence', results.get('FacultyName', {}).get('confidence', results.get('StudentName', {}).get('confidence', 0))),
                 document_type="Upload",
                 extracted_data=scan_data
             )
@@ -447,15 +520,16 @@ def analyze_webcam():
         cache_service.set_document(cache_key, jpeg_bytes)
 
         print("Sending to AWS Textract...")
-        # Analyze document with AWS Textract - same as textract2.py
+        # Analyze document with AWS Textract - Generic queries for any person
         response = textract.analyze_document(
             Document={"Bytes": jpeg_bytes},
             FeatureTypes=["QUERIES"],
             QueriesConfig={
                 "Queries": [
-                    {"Text": "What is the student's name on the Doc?", "Alias": "StudentName"},
-                    {"Text": "What is the roll number?", "Alias": "RollNumber"},
-                    {"Text": "What is the branch?", "Alias": "Branch"},
+                    {"Text": "What are the names of people mentioned in this document?", "Alias": "PersonName"},
+                    {"Text": "Who is the Lab Incharge or faculty member?", "Alias": "FacultyName"},
+                    {"Text": "What is the roll number or employee ID?", "Alias": "IDNumber"},
+                    {"Text": "What is the department or branch?", "Alias": "Department"},
                 ]
             }
         )
@@ -480,41 +554,9 @@ def analyze_webcam():
 
         print("Webcam Results:", results)
 
-        # 🔍 IMPROVED PERSON IDENTIFICATION AND NOTIFICATION
-        person_identified = False
-        person_data = None
+        # 🔍 IMPROVED PERSON IDENTIFICATION WITH FUZZY MATCHING
+        person_identified, person_data = find_person_with_fuzzy_match(results, db_manager)
         notification_sent = False
-
-        # Extract all possible names from results (including Unknown alias)
-        possible_names = []
-
-        # Check StudentName alias
-        student_name = results.get('StudentName', {}).get('value', '').strip()
-        if student_name and student_name.lower() not in ['not found', '', 'none']:
-            possible_names.append(student_name)
-
-        # Check Unknown alias (sometimes Textract puts names here)
-        unknown_value = results.get('Unknown', {}).get('value', '').strip()
-        if unknown_value and unknown_value.lower() not in ['not found', '', 'none']:
-            possible_names.append(unknown_value)
-
-        # Try to find person by any possible name
-        print(f"🔍 Trying to identify person from possible names: {possible_names}")
-        for name in possible_names:
-            person_data = db_manager.find_person_by_name(name)
-            if person_data:
-                person_identified = True
-                print(f"🎯 Successfully identified by name: '{name}' -> {person_data['name']}")
-                break
-
-        # If not found by name, try by roll number
-        if not person_identified:
-            roll_number = results.get('RollNumber', {}).get('value', '').strip()
-            if roll_number and roll_number.lower() not in ['not found', '', 'none']:
-                person_data = db_manager.find_person_by_roll_number(roll_number)
-                if person_data:
-                    person_identified = True
-                    print(f"🎯 Successfully identified by roll number: {roll_number}")
 
         # Check if email is configured
         smtp_enabled = all([
@@ -536,7 +578,7 @@ def analyze_webcam():
             db_manager.add_scan_history(
                 person_id=person_data['id'], 
                 scanned_text="Webcam scan",
-                confidence_score=results.get('StudentName', {}).get('confidence', 0),
+                confidence_score=results.get('PersonName', {}).get('confidence', results.get('FacultyName', {}).get('confidence', results.get('StudentName', {}).get('confidence', 0))),
                 document_type="Webcam",
                 extracted_data=scan_data
             )
@@ -547,8 +589,6 @@ def analyze_webcam():
                 results,
                 method="console"
             )
-        else:
-            print(f"❓ PERSON NOT FOUND in database. Tried names: {possible_names}")
 
         return jsonify({
             "success": True,

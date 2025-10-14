@@ -1,7 +1,7 @@
 // API Configuration for Smart Campus Application
 
 // EC2 Backend URL
-const API_BASE_URL = 'http://100.26.22.38:5000';
+const API_BASE_URL = 'http://127.0.0.1:5000';
 
 // Alternative: Use environment variable
 // const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://100.26.22.38:5000';
