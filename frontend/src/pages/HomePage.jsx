@@ -58,21 +58,21 @@ function HomePage() {
       <section className="relative bg-gradient-to-br from-primary via-primary/90 to-primary/80 text-primary-foreground">
         <div className="absolute inset-0 bg-background/10"></div>
         <div 
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0 opacity-40 rounded-lg"
           style={{
             backgroundImage: 'url(/college_front.jpg)',
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
         ></div>
-        
+
         <div className="relative container mx-auto px-4 py-20">
           <div className="max-w-4xl mx-auto text-center">
             <div className="mb-8">
               <img 
                 src="/collegeLOgo.jpg" 
                 alt="Institute Logo" 
-                className="h-20 w-20 mx-auto rounded-full border-4 border-primary-foreground/20 mb-4"
+                className="h-20 w-20 mx-auto rounded-full border-4 border-primary-foreground/10 mb-4"
               />
               <h1 className="text-5xl md:text-6xl font-bold mb-4 text-primary-foreground">
                 Smart Campus

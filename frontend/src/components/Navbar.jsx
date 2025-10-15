@@ -21,25 +21,25 @@ function Navbar() {
   }
 
   return (
-    <nav className="bg-card shadow-lg border-b border-border">
+    <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-lg shadow-lg border-b border-border">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Institute Name */}
-          <div className="flex items-center space-x-4">
+          <Link to="/" className="flex items-center space-x-3 group">
             <img 
               src="/collegeLOgo.jpg" 
               alt="Institute Logo" 
-              className="h-10 w-10 rounded-full object-cover border-2 border-primary/20"
+              className="h-11 w-11 rounded-full object-cover border-2 border-primary/20 group-hover:border-primary/40 transition-all"
             />
             <div>
-              <h1 className="text-xl font-bold text-foreground">
+              <h1 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">
                 Smart Campus
               </h1>
               <p className="text-xs text-muted-foreground">
-                Doc Management System
+                Document Management System
               </p>
             </div>
-          </div>
+          </Link>
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center space-x-1">
@@ -51,10 +51,10 @@ function Navbar() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                  className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      ? 'bg-primary text-primary-foreground shadow-md scale-105'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent hover:scale-105'
                   }`}
                 >
                   <Icon className="w-4 h-4 mr-2" />
@@ -62,22 +62,25 @@ function Navbar() {
                 </Link>
               )
             })}
-            <ThemeToggle />
           </div>
 
           {/* User Info and Actions */}
           <div className="flex items-center space-x-3">
-            <div className="hidden md:flex items-center space-x-2 text-sm">
-              <User className="w-4 h-4 text-muted-foreground" />
-              <span className="text-foreground font-medium">{user?.name}</span>
-              <span className="text-muted-foreground">({user?.scan_count || 0} scans)</span>
+            <div className="hidden lg:flex items-center space-x-3 px-4 py-2 rounded-lg bg-muted/50">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+                <User className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div className="text-sm">
+                <div className="font-semibold text-foreground">{user?.name}</div>
+                <div className="text-xs text-muted-foreground">{user?.scan_count || 0} scans completed</div>
+              </div>
             </div>
             <ThemeToggle />
             <Button 
               variant="ghost" 
               size="sm" 
               onClick={handleLogout}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden md:inline ml-2">Logout</span>
